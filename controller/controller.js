@@ -24,17 +24,17 @@ async function getQuestion(req, res) {
     }
 
     const question = questionResult.rows[0];
-    console.log(question);
 
     // Fetch choices for the specific question
     const choicesResult = await pool.query(`SELECT * FROM choices${theme} WHERE questionid = $1`, [questionId]);
     const choices = choicesResult.rows;
-    console.log(choices);
 
-    // Bind them together
-    question.choices = choices;
-    console.log(question);
-
+    // Remove the correct answer from the returned object
+    const removedAnswer = choices.map(({iscorrect, ...rest}) => rest)
+    // Bind the questions and choices, without the correct answer
+    question.choices = removedAnswer
+    
+  
     return res.json(question);
   } catch (error) {
     console.error('Error executing query', error);
@@ -42,5 +42,29 @@ async function getQuestion(req, res) {
   }
 }
 
+async function getAnswer(req, res) {
+  const theme = req.params.theme;
+  const questionId = req.params.questionId;
 
-module.exports = { getThemes, getQuestion };
+  try {
+    const choicesResult = await pool.query(`SELECT * FROM choices${theme} WHERE questionid = $1`, [questionId]);
+    
+    if (choicesResult.rows.length === 0) {
+      return res.status(404).send('Choices not found');
+    }
+
+    const choices = choicesResult.rows;
+
+    // Look for the choice that has "iscorrect: true"
+    const correctChoice = choices.find(choice => choice.iscorrect === true);
+
+    // After finding the iscorrect = true, remove all other items from the object and keep only the correct answer
+    return res.json(correctChoice ? [correctChoice] : [])
+  } catch (error) {
+    console.error('Error executing query', error);
+    res.status(500).send('Internal Server Error');
+  }
+}
+
+
+module.exports = { getThemes, getQuestion, getAnswer };
